@@ -1,5 +1,5 @@
 IMAGE=satishweb/nordvpn
-PLATFORMS=linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
+PLATFORMS=linux/amd64,linux/arm64,linux/arm/v7
 WORKDIR=$(shell pwd)
 TAGNAME?=devel
 ifdef PUSH

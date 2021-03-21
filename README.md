@@ -1,10 +1,10 @@
 <p align="center">
-    <a href="https://nordvpn.com/"><img src="https://github.com/bubuntux/nordvpn/raw/master/NordVpn_logo.png"/></a>
+    <a href="https://nordvpn.com/"><img src="https://github.com/satishweb/docker-nordvpn/raw/master/NordVpn_logo.png"/></a>
 </p>
 
-Official `NordVPN` client in a docker container; it makes routing traffic through the `NordVPN` network easy.
+Official `NordVPN` client in a kubernetes/docker container; it makes routing traffic through the `NordVPN` network easy.
 
-# How to use this image
+# How to use this image (Kubernetes examples to be added)
 
 This container was designed to be started first to provide a connection to other containers (using `--net=container:vpn`, see below *Starting an NordVPN client instance*).
 
@@ -15,147 +15,23 @@ This container was designed to be started first to provide a connection to other
     docker run -ti --cap-add=NET_ADMIN --cap-add=SYS_MODULE --device /dev/net/tun --name vpn \
                 --sysctl net.ipv4.conf.all.rp_filter=2 \
                 -e USER=user@email.com -e PASS='pas$word' \
-                -e CONNECT=country -e TECHNOLOGY=NordLynx -d bubuntux/nordvpn
+                -e CONNECT=country -e TECHNOLOGY=NordLynx -d satishweb/nordvpn
 
 Once it's up other containers can be started using it's network connection:
 
     docker run -it --net=container:vpn -d some/docker-container
 
-## Local Network access to services connecting to the internet through the VPN.
-However to access them from your normal network (off the 'local' docker bridge), you'll also need to run a web proxy, like so:
-```
-sudo docker run -it --name web -p 80:80 -p 443:443 \
-            --link vpn:<service_name> -d dperson/nginx \
-            -w "http://<service_name>:<PORT>/<URI>;/<PATH>"
-```
-Which will start a Nginx web server on local ports 80 and 443, and proxy any requests under /<PATH> to the to http://<service_name>:<PORT>/<URI>. To use a concrete example:
-
-```
-sudo docker run -it --name bit --net=container:vpn -d dperson/transmission
-sudo docker run -it --name web -p 80:80 -p 443:443 --link vpn:bit \
-            -d dperson/nginx -w "http://bit:9091/transmission;/transmission"
-```
-
-For multiple services (non-existant 'foo' used as an example):
-
-```
-sudo docker run -it --name bit --net=container:vpn -d dperson/transmission
-sudo docker run -it --name foo --net=container:vpn -d dperson/foo
-sudo docker run -it --name web -p 80:80 -p 443:443 --link vpn:bit \
-            --link vpn:foo -d dperson/nginx \
-            -w "http://bit:9091/transmission;/transmission" \
-            -w "http://foo:8000/foo;/foo"
-```
-## Routing access without the web proxy.
-
-The environment variable NETWORK must be your local network that you would connect to the server running the docker containers on. Running the following on your docker host should give you the correct network: `ip route | awk '!/ (docker0|br-)/ && /src/ {print $1}'`
-
-    docker run -ti --cap-add=NET_ADMIN --device /dev/net/tun --name vpn \
-                -p 8080:80 -e NETWORK=192.168.1.0/24 \ 
-                -e USER=user@email.com -e PASS='pas$word' -d bubuntux/nordvpn                
-
-Now just create the second container _without_ the `-p` parameter, only inlcude the `--net=container:vpn`, the port should be declare in the vpn container.
-
-    docker run -ti --rm --net=container:vpn -d bubuntux/riot-web
-
-now the service provided by the second container would be available from the host machine (http://localhost:8080) or anywhere inside the local network (http://192.168.1.xxx:8080).
-
-## docker-compose example with web proxy
-```
-version: "3"
-services:
-  vpn:
-    image: bubuntux/nordvpn
-    cap_add:
-      - NET_ADMIN               # Required
-      - SYS_MODULE              # Required for TECHNOLOGY=NordLynx
-    sysctls:
-      - net.ipv4.conf.all.rp_filter=2
-    devices:
-      - /dev/net/tun            # Required
-    environment:                # Review https://github.com/bubuntux/nordvpn#environment-variables
-      - USER=user@email.com     # Required
-      - "PASS=pas$word"         # Required
-      - CONNECT=United_States
-      - TECHNOLOGY=NordLynx
-    ulimits:                    # Recommended for High bandwidth scenarios
-      memlock:
-        soft: -1
-        hard: -1
-
-  torrent:
-    image: linuxserver/qbittorrent
-    network_mode: service:vpn
-    depends_on:
-      - vpn
-
-  web:
-    image: dperson/nginx        # https://github.com/dperson/nginx
-    links:                                                                                   
-      - vpn:torrent                                                                          
-    depends_on:                                                                              
-      - torrent                                                                              
-    tmpfs:                                                                                   
-      - /run                                                                                 
-      - /tmp                                                                                 
-      - /var/cache/nginx                                                                     
-    ports:                                                                                   
-      - 80:80                                                                                
-      - 443:443                                                                              
-    command: -w "http://torrent:8080/;/" 
-    
-# The torrent service would be available at http://localhost/ 
-```
-
-## docker-compose example without web proxy
-```
-version: "3"
-services:
-  vpn:
-    image: bubuntux/nordvpn
-    network_mode: bridge        # Required
-    cap_add:
-      - NET_ADMIN               # Required
-      - SYS_MODULE              # Required for TECHNOLOGY=NordLynx
-    sysctls:
-      - net.ipv4.conf.all.rp_filter=2
-    devices:
-      - /dev/net/tun            # Required
-    environment:                # Review https://github.com/bubuntux/nordvpn#environment-variables
-      - USER=user@email.com     # Required
-      - "PASS=pas$word"         # Required
-      - CONNECT=United_States
-      - TECHNOLOGY=NordLynx
-      - NETWORK=192.168.1.0/24 
-    ulimits:                    # Recommended for High bandwidth scenarios
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - 8080:8080
-
-  torrent:
-    image: linuxserver/qbittorrent
-    network_mode: service:vpn
-    depends_on:
-      - vpn
-      
-# The torrent service would be available at https://localhost:8080/ or anywhere inside the local network http://192.168.1.xxx:8080
- ```
-
-## Killswitch
-All traffic going through the container is routed to the vpn (unless whitelisted), If connection to the vpn drops your connection to the internet stays blocked until the VPN tunnel is restored. THIS IS THE DEFAULT BEHAVIOUR AND CAN NOT BE DISABLE.
 
 # ENVIRONMENT VARIABLES
 
  * `USER`     - User for NordVPN account.
  * `PASS`     - Password for NordVPN account, surrounding the password in single quotes will prevent issues with special characters such as `$`.
  * `CONNECT`  -  [country]/[server]/[country_code]/[city]/[group] or [country] [city], if none provide you will connect to  the recommended server.
-   - Provide a [country] argument to connect to a specific country. For example: Australia , Use `docker run --rm bubuntux/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn countries"` to get the list of countries.
+   - Provide a [country] argument to connect to a specific country. For example: Australia , Use `docker run --rm satishweb/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn countries"` to get the list of countries.
    - Provide a [server] argument to connecto to a specific server. For example: jp35 , [Full List](https://nordvpn.com/servers/tools/)
    - Provide a [country_code] argument to connect to a specific country. For example: us 
-   - Provide a [city] argument to connect to a specific city. For example: 'Hungary Budapest' , Use `docker run --rm bubuntux/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn cities [country]"` to get the list of cities. 
-   - Provide a [group] argument to connect to a specific servers group. For example: P2P , Use `docker run --rm bubuntux/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn groups"` to get the full list.
+   - Provide a [city] argument to connect to a specific city. For example: 'Hungary Budapest' , Use `docker run --rm satishweb/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn cities [country]"` to get the list of cities. 
+   - Provide a [group] argument to connect to a specific servers group. For example: P2P , Use `docker run --rm satishweb/nordvpn sh -c "nordvpnd & sleep 1 && nordvpn groups"` to get the full list.
    - --group value, -g value  Specify a server group to connect to. For example: 'us -g p2p'
  * `TECHNOLOGY` - Specify Technology to use: 
    * OpenVPN    - Traditional connection.
@@ -171,7 +47,3 @@ All traffic going through the container is routed to the vpn (unless whitelisted
  * `GROUPID` - Set the GID for the vpn.
  * `DEBUG`    - Set to 'on' for troubleshooting (User and Pass would be log).
  * `PORTS`  - Semicolon delimited list of ports to whitelist for both UDP and TCP. For example `- PORTS=9091;9095`
-
-# Issues
-
-If you have any problems with or questions about this image, please contact me through a [GitHub issue](https://github.com/bubuntux/nordvpn/issues).
