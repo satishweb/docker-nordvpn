@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:18.04
 
 LABEL MAINTAINER satish@satishweb.com
 
@@ -22,8 +22,5 @@ RUN apt-get update -y && \
 		/var/lib/apt/lists/* \
 		/var/tmp/*
 
-RUN mkdir -p /dev/net ;\
-  mknod /dev/net/tun c 10 200 ;\
-  chmod 600 /dev/net/tun
 CMD /usr/bin/start_vpn.sh
 COPY start_vpn.sh /usr/bin
