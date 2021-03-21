@@ -16,12 +16,17 @@ endif
 
 all:
 	TAGNAME=$$(set -x && \
-	docker run --rm --entrypoint=bash ubuntu:20.04 -c \
+	docker run --rm --entrypoint=bash ubuntu:18.04 -c \
 		"set -x; \
 		apt update -yqq>/dev/null 2>&1 && \
 		apt-get install -yqq wget >/dev/null 2>&1 && \
-		wget -q https://repo.nordvpn.com/deb/nordvpn/debian/pool/main/ -O - \
-		|sed 's|</b>|-|g' | sed 's|<[^>]*>||g'|grep arm64.deb|tail -1|cut -d '_' -f 2" \
+		wget -q https://repo.nordvpn.com/deb/nordvpn/debian/pool/main/nordvpn-release_1.0.0_all.deb -O /tmp/nordrepo.deb >/dev/null 2>&1 && \
+		apt-get install -yqq /tmp/nordrepo.deb >/dev/null 2>&1 && \
+		apt-get update -yqq >/dev/null 2>&1 && \
+		apt-cache madison nordvpn \
+		|head -1 \
+		|cut -d \| -f 2 \
+		|sed 's/ //g'" \
 	) ;\
 	${MAKE} build TAGNAME=$$TAGNAME
 
